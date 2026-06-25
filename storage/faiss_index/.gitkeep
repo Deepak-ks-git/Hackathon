@@ -1,0 +1,2 @@
+This directory holds the persisted FAISS index (index.faiss) after you click
+"Train Knowledge Base" in the app. It starts empty.

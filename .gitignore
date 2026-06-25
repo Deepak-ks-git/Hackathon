@@ -1,0 +1,28 @@
+# Environment / secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+
+# Generated knowledge base artifacts (regenerate via "Train Knowledge Base")
+storage/faiss_index/*.faiss
+storage/ticket_metadata.json
+storage/feedback.json
+storage/submitted_tickets.json
+!storage/faiss_index/.gitkeep
