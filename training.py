@@ -1,5 +1,5 @@
 """
-training_app.py
+training.py
 
 AI Ticket Router — Knowledge Base Training Console (Administrator App).
 
@@ -16,10 +16,10 @@ Responsibilities:
 
 This file contains NO backend logic of its own. It only calls into the
 existing `services.training` and `services.vector_store` modules, which
-are shared with `ticket_creation_app.py`.
+are shared with `ticket.py`.
 
 Run with:
-    streamlit run training_app.py --server.port 8501
+    streamlit run training.py --server.port 8501
 """
 
 from __future__ import annotations
