@@ -275,11 +275,7 @@ st.markdown("</div>", unsafe_allow_html=True)
 
 st.markdown('<div class="panel-card model-info">', unsafe_allow_html=True)
 st.markdown('<div class="panel-title">⚙️ Configured Models (read-only)</div>', unsafe_allow_html=True)
-st.caption(
-    "Model selection is fully code-driven (DEFAULT_MODEL in .env → configured fallback → "
-    "GenAI Lab model registry). End users never choose a model — this is shown here for "
-    "administrator visibility only."
-)
+
 
 try:
     available_models = fetch_available_models()

@@ -66,6 +66,12 @@ URGENCY_OPTIONS = ["1 - High", "2 - Medium", "3 - Low"]
 STATE_OPTIONS = ["New", "In Progress", "On Hold", "Resolved", "Closed"]
 CONTACT_TYPE_OPTIONS = ["Phone", "Email", "Self-Service", "Chat", "Walk-in"]
 
+# Below this confidence, the AI Suggest dialog shows a generic
+# "couldn't find a suggestion" message instead of the recommendation
+# fields. Matches services.classify._get_confidence_threshold()'s default
+# (CONFIDENCE_THRESHOLD env var, defaulting to 0.70).
+AI_SUGGEST_CONFIDENCE_THRESHOLD = 0.70
+
 
 # ---------------------------------------------------------------------------
 # Resolve the model to use internally. This is the ONLY place this app
@@ -478,6 +484,18 @@ def ai_suggest_dialog() -> None:
     if result.warning and not result.business_service:
         st.warning(result.warning)
         if st.button("Cancel", use_container_width=True, key="dialog_cancel_warning"):
+            st.session_state["show_ai_modal"] = False
+            st.rerun()
+        return
+
+    # If confidence is below the configured threshold, don't show the
+    # (unreliable) recommendation fields — show a generic message instead.
+    if result.confidence < AI_SUGGEST_CONFIDENCE_THRESHOLD:
+        st.info(
+            "🤔 Couldn't find a confident suggestion. Please try providing a more "
+            "accurate and detailed description."
+        )
+        if st.button("Cancel", use_container_width=True, key="dialog_cancel_low_confidence"):
             st.session_state["show_ai_modal"] = False
             st.rerun()
         return
