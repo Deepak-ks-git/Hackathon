@@ -66,6 +66,12 @@ URGENCY_OPTIONS = ["1 - High", "2 - Medium", "3 - Low"]
 STATE_OPTIONS = ["New", "In Progress", "On Hold", "Resolved", "Closed"]
 CONTACT_TYPE_OPTIONS = ["Phone", "Email", "Self-Service", "Chat", "Walk-in"]
 
+# Below this confidence, the AI Suggest dialog shows a generic
+# "couldn't find a suggestion" message instead of the recommendation
+# fields. Matches services.classify._get_confidence_threshold()'s default
+# (CONFIDENCE_THRESHOLD env var, defaulting to 0.70).
+AI_SUGGEST_CONFIDENCE_THRESHOLD = 0.70
+
 
 # ---------------------------------------------------------------------------
 # Resolve the model to use internally. This is the ONLY place this app
@@ -233,6 +239,142 @@ CUSTOM_CSS = """
         font-size: 0.8rem;
         margin-top: 0.4rem;
     }
+
+    /* ---- Top nav shell + breadcrumb bar (matches reference screenshot) ---- */
+    .sn-shell-nav {
+        background-color: #14171c;
+        color: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.5rem 1rem;
+        margin: -1rem -1rem 0.6rem -1rem;
+        font-size: 0.85rem;
+    }
+    .sn-shell-nav .sn-brand {
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        font-size: 0.95rem;
+        margin-right: 1.2rem;
+        white-space: nowrap;
+    }
+    .sn-shell-nav .sn-brand small {
+        display: block;
+        font-size: 0.55rem;
+        font-weight: 400;
+        color: #b9bec7;
+        letter-spacing: 0.04em;
+    }
+    .sn-shell-nav .sn-nav-links {
+        display: flex;
+        gap: 1.3rem;
+        color: #d7dae0;
+        flex: 1;
+    }
+    .sn-shell-nav .sn-record-pill {
+        background-color: #1f232b;
+        border-radius: 14px;
+        padding: 0.25rem 0.9rem;
+        font-size: 0.8rem;
+        color: #e6e8eb;
+        flex: 1;
+        max-width: 480px;
+        text-align: center;
+        margin: 0 1rem;
+    }
+    .sn-shell-nav .sn-icons {
+        display: flex;
+        gap: 0.9rem;
+        align-items: center;
+        color: #c7cad1;
+        font-size: 0.95rem;
+    }
+    .sn-shell-nav .sn-avatar {
+        background-color: #2c79c7;
+        color: #fff;
+        border-radius: 50%;
+        width: 1.5rem;
+        height: 1.5rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.65rem;
+        font-weight: 700;
+    }
+
+    .sn-breadcrumb-row {
+        background-color: var(--sn-panel);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.4rem 1rem;
+        margin: 0 -1rem 0.6rem -1rem;
+        border-bottom: 1px solid #d7deea;
+    }
+    .sn-breadcrumb-row .sn-bc-left {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+    }
+    .sn-breadcrumb-row .sn-bc-back {
+        border: 1px solid var(--sn-field-border);
+        border-radius: 4px;
+        width: 1.6rem;
+        height: 1.6rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--sn-accent);
+        font-size: 0.85rem;
+        background: #fff;
+    }
+    .sn-breadcrumb-row .sn-bc-title {
+        font-size: 0.92rem;
+        font-weight: 700;
+        color: var(--sn-text);
+        line-height: 1.1;
+    }
+    .sn-breadcrumb-row .sn-bc-subtitle {
+        font-size: 0.78rem;
+        font-weight: 700;
+        color: var(--sn-text);
+        line-height: 1.1;
+    }
+    .sn-breadcrumb-row .sn-bc-right {
+        display: flex;
+        align-items: center;
+        gap: 0.8rem;
+        color: var(--sn-text-dim);
+        font-size: 0.95rem;
+    }
+    .sn-breadcrumb-row .sn-bc-next {
+        background-color: var(--sn-accent);
+        color: #fff;
+        border-radius: 4px;
+        padding: 0.3rem 1rem;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+
+    .sn-tab-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.45rem 1rem 0.35rem 1rem;
+        margin: 0 -1rem 0.8rem -1rem;
+        border-bottom: 2px solid #1a1a1a;
+        font-size: 0.85rem;
+        color: var(--sn-text);
+    }
+
+    .sn-readonly-field {
+        background-color: #e4e6ea;
+        border: 1px solid var(--sn-field-border);
+        border-radius: 4px;
+        padding: 0.4rem 0.6rem;
+        font-size: 0.85rem;
+        color: var(--sn-text-dim);
+        min-height: 1.4rem;
+    }
 </style>
 """
 
@@ -263,11 +405,13 @@ def init_session_state() -> None:
         "assignment_group": "",
         "short_description": "",
         "description": "",
+        "override_suggestion": False,
 
         # AI suggestion / modal state
         "ai_result": None,            # ClassificationResult | None
         "ai_result_snapshot": None,   # dict snapshot of AI suggestion at suggest-time, for feedback diffing
         "show_ai_modal": False,
+        "show_ai_validation_modal": False,  # popup shown when short desc + description are empty
         "applied_suggestion": None,   # dict of last-applied values, for reference
 
         # Knowledge base availability (read-only check; training happens in training_app.py)
@@ -299,6 +443,7 @@ def reset_form() -> None:
     st.session_state["assignment_group"] = ""
     st.session_state["short_description"] = ""
     st.session_state["description"] = ""
+    st.session_state["override_suggestion"] = False
     st.session_state["ai_result"] = None
     st.session_state["ai_result_snapshot"] = None
     st.session_state["applied_suggestion"] = None
@@ -306,6 +451,19 @@ def reset_form() -> None:
 
 storage_service.ensure_storage_files()
 init_session_state()
+
+
+# ---------------------------------------------------------------------------
+# AI Suggest validation popup (st.dialog) — shown when Short Description and
+# Description are both empty when the agent clicks AI Suggest.
+# ---------------------------------------------------------------------------
+
+@st.dialog("AI Suggest")
+def ai_suggest_validation_dialog() -> None:
+    st.warning("Please enter short description and description fields to proceed with AI suggestion.")
+    if st.button("OK", use_container_width=True, type="primary", key="validation_ok"):
+        st.session_state["show_ai_validation_modal"] = False
+        st.rerun()
 
 
 # ---------------------------------------------------------------------------
@@ -330,6 +488,18 @@ def ai_suggest_dialog() -> None:
             st.rerun()
         return
 
+    # If confidence is below the configured threshold, don't show the
+    # (unreliable) recommendation fields — show a generic message instead.
+    if result.confidence < AI_SUGGEST_CONFIDENCE_THRESHOLD:
+        st.info(
+            "🤔 Couldn't find a confident suggestion. Please try providing a more "
+            "accurate and detailed description."
+        )
+        if st.button("Cancel", use_container_width=True, key="dialog_cancel_low_confidence"):
+            st.session_state["show_ai_modal"] = False
+            st.rerun()
+        return
+
     st.markdown("**AI Summary**")
     st.write(result.summary or "—")
 
@@ -340,7 +510,7 @@ def ai_suggest_dialog() -> None:
         st.markdown("**Recommended Priority**")
         st.write(result.priority or "—")
     with col2:
-        st.markdown("**Recommended Assignment Group**")
+        st.markdown("**Recommended Routing Rule**")
         st.write(result.assignment_group or "—")
         st.markdown("**Confidence Score**")
         confidence_pct = result.confidence * 100
@@ -408,17 +578,37 @@ def ai_suggest_dialog() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Header
+# Header — nav shell + breadcrumb row + tab row (matches reference screenshot)
 # ---------------------------------------------------------------------------
 
 st.markdown(
     """
-    <div class="sn-topbar">
-        <div>
-            <p class="sn-title">🎫 Intake Ticket — New record</p>
-            <p class="sn-subtitle">Intake Details · AI-assisted routing suggestions available via AI Suggest</p>
+    <div class="sn-shell-nav">
+        <div class="sn-brand">IHG<small>HOTELS &amp; RESORTS</small></div>
+        <div class="sn-nav-links">
+            <span>All</span><span>Favorites</span><span>History</span><span>Workspaces</span>
         </div>
-        <span class="sn-badge">HY-GLBL-Service Desk Level 1</span>
+        <div class="sn-record-pill">IHG mySupport- Create Ticket | Intake Ticket ☆</div>
+        <div class="sn-icons">
+            <span>💬</span><span>❓</span><span>🔔</span><span class="sn-avatar">U</span>
+        </div>
+    </div>
+    <div class="sn-breadcrumb-row">
+        <div class="sn-bc-left">
+            <div class="sn-bc-back">‹</div>
+            <div>
+                <div class="sn-bc-title">Intake Ticket</div>
+                <div class="sn-bc-subtitle">New record</div>
+            </div>
+        </div>
+        <div class="sn-bc-right">
+            <span>📎</span><span>⚙️</span><span>⋯</span>
+            <span class="sn-bc-next">Next</span>
+        </div>
+    </div>
+    <div class="sn-tab-row">
+        <span>Intake Details</span>
+        <span>Record Preview</span>
     </div>
     """,
     unsafe_allow_html=True,
@@ -440,8 +630,6 @@ if not st.session_state["kb_ready"]:
 # ---------------------------------------------------------------------------
 # Ticket form
 # ---------------------------------------------------------------------------
-
-st.markdown('<div class="sn-section-header">Intake Details</div>', unsafe_allow_html=True)
 
 left_col, right_col = st.columns(2)
 
@@ -490,7 +678,7 @@ with left_col:
     with biz_ai_col:
         ai_suggest_clicked = st.button(
             "🤖 AI Suggest", key="ai_suggest_btn", use_container_width=True,
-            help="Get AI-recommended Business Service, Assignment Group, and Priority",
+            help="Get AI-recommended Business Service, Routing Rule, and Priority",
         )
 
     st.session_state["situation"] = st.text_input(
@@ -502,6 +690,36 @@ with left_col:
 
 # ----------------------------- RIGHT SECTION -----------------------------
 with right_col:
+    st.markdown('<div class="sn-field-label">Record type</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sn-readonly-field">&nbsp;</div>', unsafe_allow_html=True)
+
+    st.markdown(
+        '<div class="sn-field-label" style="margin-top:0.5rem;">Routing rule</div>',
+        unsafe_allow_html=True,
+    )
+    routing_rule_col, routing_info_col = st.columns([6, 1])
+    with routing_rule_col:
+        # NOTE: "Routing rule" replaces the previous "Assignment Group" field — same
+        # session_state key (assignment_group) and same AI Suggest behavior, just
+        # relabeled to match the ServiceNow screenshot. Still editable and still
+        # populated by Apply Suggestion in the AI Suggest dialog.
+        st.session_state["assignment_group"] = st.text_input(
+            "Routing rule", value=st.session_state["assignment_group"],
+             label_visibility="collapsed",
+        )
+    with routing_info_col:
+        st.button("ℹ️", key="routing_rule_info", use_container_width=True,
+                   help="Routing rule determines which team this ticket is assigned to.")
+
+    st.session_state["override_suggestion"] = st.checkbox(
+        "Override suggestion", value=st.session_state.get("override_suggestion", False),
+    )
+
+    st.markdown('<div class="sn-field-label" style="margin-top:0.5rem;">Template</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sn-readonly-field">&nbsp;</div>', unsafe_allow_html=True)
+
+    st.markdown("<div style='height:0.6rem;'></div>", unsafe_allow_html=True)
+
     st.session_state["impact"] = st.selectbox(
         "Impact", IMPACT_OPTIONS,
         index=IMPACT_OPTIONS.index(st.session_state["impact"]) if st.session_state["impact"] in IMPACT_OPTIONS else 2,
@@ -518,15 +736,11 @@ with right_col:
         "Priority", PRIORITY_OPTIONS, index=priority_index,
         help="AI Suggest can recommend a priority based on similar historical tickets.",
     )
-    st.session_state["assignment_group"] = st.text_input(
-        "Assignment Group", value=st.session_state["assignment_group"],
-        placeholder="AI can suggest this →",
-    )
 
     if st.session_state.get("applied_suggestion"):
         st.markdown(
             '<div class="applied-banner">✅ AI suggestion applied to Business Service, '
-            "Assignment Group, and Priority.</div>",
+            "Routing rule, and Priority.</div>",
             unsafe_allow_html=True,
         )
 
@@ -550,7 +764,7 @@ with submit_col:
 # ----------------------------- AI SUGGEST ACTION -----------------------------
 if ai_suggest_clicked:
     if not st.session_state["short_description"].strip() and not st.session_state["description"].strip():
-        st.warning("Please enter a Short Description or Description before requesting an AI suggestion.")
+        st.session_state["show_ai_validation_modal"] = True
     else:
         if not st.session_state["kb_ready"]:
             st.warning(
@@ -577,7 +791,7 @@ if submit_clicked:
     if not st.session_state["short_description"].strip():
         st.error("Short Description is required to submit a ticket.")
     elif not st.session_state["business_service"].strip() or not st.session_state["assignment_group"].strip():
-        st.error("Business Service and Assignment Group are required to submit a ticket.")
+        st.error("Business Service and Routing Rule are required to submit a ticket.")
     else:
         result: ClassificationResult | None = st.session_state.get("ai_result")
         snapshot = st.session_state.get("ai_result_snapshot")
@@ -622,7 +836,9 @@ if submit_clicked:
         st.rerun()
 
 
-# Open the modal if flagged (called at the end so widgets above have already
-# registered this run before the dialog takes over).
-if st.session_state.get("show_ai_modal"):
+# Open the modal(s) if flagged (called at the end so widgets above have
+# already registered this run before a dialog takes over).
+if st.session_state.get("show_ai_validation_modal"):
+    ai_suggest_validation_dialog()
+elif st.session_state.get("show_ai_modal"):
     ai_suggest_dialog()
